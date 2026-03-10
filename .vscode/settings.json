@@ -1,0 +1,8 @@
+{
+    "cSpell.showAutocompleteDirectiveSuggestions": true,
+    "javascript.suggest.enabled": false,
+    "typescript.suggest.enabled": false,
+    "tailwindCSS.suggestions": false,
+    "terminal.integrated.allowChords": false,
+    "editor.inlineSuggest.enabled": true
+}
