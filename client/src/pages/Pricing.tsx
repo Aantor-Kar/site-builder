@@ -1,5 +1,8 @@
 import React, { useState } from "react";
 import { appPlans } from "../assets/assets";
+import { authClient } from '@/lib/auth-client';
+import { toast } from 'sonner';
+import api from '@/configs/axios';
 
 interface Plan {
   id: string;
@@ -11,9 +14,19 @@ interface Plan {
 }
 
 const Pricing = () => {
+  const {data: session} = authClient.useSession()
   const [plans] = useState<Plan[]>(appPlans);
   const handlePurchase = async (planId: string) => {
-
+    try {
+      if(!session?.user){
+        return toast('PLease login to purchase a plan', {type: 'error'})
+      }
+      const {data} = await api.post('/api/user/purchase-credits', {planId})
+      window.location.href = data.payment_link;
+    } catch (error: any) {
+      toast(error?.response?.data?.message || 'An error occurred while processing your purchase. Please try again.', {type: 'error'})
+      console.error('Purchase error:', error);
+    }
   }
   return (
     <>

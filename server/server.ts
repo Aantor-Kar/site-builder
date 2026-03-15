@@ -5,6 +5,7 @@ import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth.js";
 import userRouter from './routes/userRoutes'
 import projectRouter from './routes/projectRoutes'
+import { stripeWebhooks } from './controllers/stripeWebhooks';
 
 const app = express();
 const authHandler = toNodeHandler(auth);
@@ -38,6 +39,7 @@ const corsOptions = {
 
 // Middleware
 app.use(cors(corsOptions))
+app.post('/api/stripe', express.raw({type: 'application/json'}), stripeWebhooks)
 app.use(express.json({limit: '50mb'}));
 
 // Better Auth's handler can bypass/overwrite Express middleware headers in some setups.

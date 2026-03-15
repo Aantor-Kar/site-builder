@@ -61,7 +61,7 @@ export const makeRevision = async (req: Request, res: Response) => {
     });
     // Enhance user prompt
     const promptEnhanceResponse = await openai.chat.completions.create({
-      model: "qwen/qwen3-coder:free",
+      model: process.env.OPENAI_MODEL,
       messages: [
         {
           role: "system",
@@ -116,7 +116,7 @@ export const makeRevision = async (req: Request, res: Response) => {
     });
     // Generate website code
     const codeGenerationResponse = await openai.chat.completions.create({
-      model: "qwen/qwen3-coder:free",
+      model: process.env.OPENAI_MODEL,
       messages: [
         {
           role: "system",
@@ -356,29 +356,36 @@ export const saveProjectCode = async (req: Request, res: Response) => {
     const userId = (req as any).userId;
     const { projectId } = req.params;
     const { code } = req.body;
+
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
+
     if (!code) {
       return res.status(400).json({ message: "Code is required" });
     }
+
     const project = await prisma.websiteProject.findFirst({
       where: { id: projectId, userId },
     });
+
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
     }
-    await prisma.websiteProject.update({
+
+    const updatedProject = await prisma.websiteProject.update({
       where: { id: projectId },
       data: {
         current_code: code,
-        current_version_index: '',
       },
     });
 
-    res.json({ message: "Project saved successfully" });
+    res.json({
+      message: "Project saved successfully",
+      project: updatedProject,
+    });
   } catch (error: any) {
-    console.log(error.code || error.message);
+    console.log(error);
     res.status(500).json({ message: error.message });
   }
 };

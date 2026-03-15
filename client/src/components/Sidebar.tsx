@@ -8,7 +8,7 @@ import {
   UserIcon,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import api from "../configs/axios.ts";
+import api from "../configs/axios";
 import { toast } from "sonner";
 
 interface SidebarProps {
@@ -29,86 +29,73 @@ const Sidebar = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState("");
 
+  /* ---------------------- ROLLBACK ---------------------- */
+
   const handleRollback = async (versionId: string) => {
-
-  };
-
-  const handleRevisions = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || !project) {
-      return;
-    }
-    // #region agent log
-    fetch('http://127.0.0.1:7581/ingest/7f8eb351-b311-4545-adc7-018ba6be9823',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'X-Debug-Session-Id':'93afee'
-      },
-      body:JSON.stringify({
-        sessionId:'93afee',
-        runId:'revision',
-        hypothesisId:'H1',
-        location:'client/src/components/Sidebar.tsx:handleRevisions:start',
-        message:'handleRevisions submitted',
-        data:{
-          projectId: project?.id,
-          inputLength: input ? input.length : 0
-        },
-        timestamp:Date.now()
-      })
-    }).catch(()=>{});
-    // #endregion
-    setIsGenerating(true);
     try {
-      const { data } = await api.post(`/api/project/revision/${project.id}`, {
-        message: input,
-      });
-      // #region agent log
-      fetch('http://127.0.0.1:7581/ingest/7f8eb351-b311-4545-adc7-018ba6be9823',{
-        method:'POST',
-        headers:{
-          'Content-Type':'application/json',
-          'X-Debug-Session-Id':'93afee'
-        },
-        body:JSON.stringify({
-          sessionId:'93afee',
-          runId:'revision',
-          hypothesisId:'H1',
-          location:'client/src/components/Sidebar.tsx:handleRevisions:success',
-          message:'Revision request completed',
-          data:{
-            projectId: project.id,
-            responseMessage: data?.message || null
-          },
-          timestamp:Date.now()
-        })
-      }).catch(()=>{});
-      // #endregion
-      try {
-        const projectRes = await api.get(`/api/user/project/${project.id}`);
-        setProject(projectRes.data.project);
-      } catch (refetchError: any) {
-        toast.error(
-          refetchError?.response?.data?.message ||
-            refetchError?.message ||
-            "Failed to refresh project after revision.",
-        );
-      }
-      setInput("");
+      const confirm = window.confirm(
+        "Are you sure you want to roll back to this version?"
+      );
+
+      if (!confirm) return;
+
+      setIsGenerating(true);
+
+      await api.get(`/api/project/rollback/${project.id}/${versionId}`);
+
+      const projectRes = await api.get(`/api/user/project/${project.id}`);
+
+      setProject(projectRes.data.project);
+
+      toast.success("Rolled back to selected version");
     } catch (error: any) {
       toast.error(
         error?.response?.data?.message ||
           error?.message ||
-          "Failed to apply revision. Please try again.",
+          "Failed to rollback"
       );
     } finally {
       setIsGenerating(false);
     }
-  }
+  };
+
+  /* ---------------------- REVISION ---------------------- */
+
+  const handleRevisions = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!input.trim()) return;
+
+    setIsGenerating(true);
+
+    try {
+      await api.post(`/api/project/revision/${project.id}`, {
+        message: input,
+      });
+
+      const projectRes = await api.get(`/api/user/project/${project.id}`);
+
+      setProject(projectRes.data.project);
+
+      setInput("");
+
+      toast.success("Changes applied");
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Revision failed"
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  /* ---------------------- AUTO SCROLL ---------------------- */
 
   useEffect(() => {
     const el = containerRef.current;
+
     if (!el) return;
 
     el.scrollTo({
@@ -117,6 +104,8 @@ const Sidebar = ({
     });
   }, [project?.conversation?.length, project?.versions?.length, isGenerating]);
 
+  /* ---------------------- UI ---------------------- */
+
   return (
     <div
       className={`h-full sm:max-w-sm rounded-xl bg-gray-900 border-gray-800 transition-all ${
@@ -124,7 +113,9 @@ const Sidebar = ({
       }`}
     >
       <div className="flex flex-col h-full">
-        {/* Message container */}
+
+        {/* MESSAGE AREA */}
+
         <div
           ref={containerRef}
           className="flex-1 overflow-y-auto no-scrollbar px-3 flex flex-col gap-4"
@@ -133,12 +124,14 @@ const Sidebar = ({
             .sort(
               (a, b) =>
                 new Date(a.timestamp).getTime() -
-                new Date(b.timestamp).getTime(),
+                new Date(b.timestamp).getTime()
             )
             .map((message) => {
+
               const isMessage = "content" in message;
 
               if (isMessage) {
+
                 const msg = message as Message;
                 const isUser = msg.role === "user";
 
@@ -150,7 +143,7 @@ const Sidebar = ({
                     }`}
                   >
                     {!isUser && (
-                      <div className="w-8 h-8 rounded-full bg-linear-to-br from-indigo-600 to-indigo-700 flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-600 to-indigo-700 flex items-center justify-center">
                         <BotIcon className="size-5 text-white" />
                       </div>
                     )}
@@ -158,7 +151,7 @@ const Sidebar = ({
                     <div
                       className={`max-w-[80%] p-2 px-4 rounded-2xl shadow-sm text-sm mt-5 leading-relaxed ${
                         isUser
-                          ? "bg-linear-to-r from-indigo-500 to-indigo-600 text-white rounded-tr-none"
+                          ? "bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-tr-none"
                           : "rounded-tl-none bg-gray-800 text-gray-100"
                       }`}
                     >
@@ -172,56 +165,55 @@ const Sidebar = ({
                     )}
                   </div>
                 );
-              } else {
-                const ver = message as Version;
-
-                return (
-                  <div
-                    key={ver.id}
-                    className="w-4/5 mx-auto my-2 p-3 rounded-xl bg-gray-800 text-gray-100 shadow flex flex-col gap-2"
-                  >
-                    <div className="text-xs font-medium">
-                      Code Updated <br />
-                      <span className="text-gray-500 text-xs font-normal">
-                        {new Date(ver.timestamp).toLocaleString()}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      {project.current_version_index === ver.id ? (
-                        <button className="px-3 py-1 rounded-md text-xs bg-gray-700">
-                          Current version
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleRollback(ver.id)}
-                          className="px-3 py-1 rounded-md text-xs bg-indigo-500 hover:bg-indigo-600 text-white"
-                        >
-                          Roll back to this version
-                        </button>
-                      )}
-
-                      <Link
-                        target="_blank"
-                        to={`/preview/${project.id}/${ver.id}`}
-                      >
-                        <EyeIcon className="size-6 p-1 bg-gray-700 hover:bg-indigo-500 transition-colors rounded" />
-                      </Link>
-                    </div>
-                  </div>
-                );
               }
+
+              /* ---------- VERSION BLOCK ---------- */
+
+              const ver = message as Version;
+
+              return (
+                <div
+                  key={ver.id}
+                  className="w-4/5 mx-auto my-2 p-3 rounded-xl bg-gray-800 text-gray-100 shadow flex flex-col gap-2"
+                >
+                  <div className="text-xs font-medium">
+                    Code Updated
+                    <br />
+                    <span className="text-gray-500 text-xs font-normal">
+                      {new Date(ver.timestamp).toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    {project.current_version_index === ver.id ? (
+                      <button className="px-3 py-1 rounded-md text-xs bg-gray-700">
+                        Current version
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleRollback(ver.id)}
+                        className="px-3 py-1 rounded-md text-xs bg-indigo-500 hover:bg-indigo-600 text-white"
+                      >
+                        Rollback
+                      </button>
+                    )}
+
+                    <Link target="_blank" to={`/preview/${project.id}/${ver.id}`}>
+                      <EyeIcon className="size-6 p-1 bg-gray-700 hover:bg-indigo-500 transition-colors rounded" />
+                    </Link>
+                  </div>
+                </div>
+              );
             })}
+
+          {/* LOADING AI */}
 
           {isGenerating && (
             <div className="flex items-start gap-3 justify-start">
               <BotIcon className="size-5 text-white" />
 
               <div className="flex gap-1.5 h-full items-end">
-                <span
-                  className="size-2 rounded-full animate-bounce bg-gray-600"
-                  style={{ animationDelay: "0s" }}
-                />
+                <span className="size-2 rounded-full animate-bounce bg-gray-600" />
                 <span
                   className="size-2 rounded-full animate-bounce bg-gray-600"
                   style={{ animationDelay: "0.2s" }}
@@ -235,26 +227,28 @@ const Sidebar = ({
           )}
         </div>
 
-        {/* Input Area */}
-        <form onSubmit={handleRevisions} className="m-3 relative">
-          <div className="flex items-center gap-2">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              rows={4}
-              placeholder="Describe your website or request changes..."
-              className="flex-1 p-3 rounded-xl resize-none text-sm outline-none ring ring-gray-700 focus:ring-indigo-500 bg-gray-800 text-gray-100 placeholder-gray-400 transition-all"
-              disabled={isGenerating}
-            />
+        {/* INPUT AREA */}
 
-            <button disabled={isGenerating || !input.trim()} className='absolute bottom-2.5 right-2.5 rounded-full bg-linear-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white transition-colors disabled:opacity-60'>
-              {isGenerating ? (
-                <Loader2Icon className="size-7 p-1.5 animate-spin text-white" />
-              ) : (
-                <SendIcon className="size-7 p-1.5 text-white" />
-              )}
-            </button>
-          </div>
+        <form onSubmit={handleRevisions} className="m-3 relative">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            rows={4}
+            placeholder="Describe your website or request changes..."
+            className="w-full p-3 rounded-xl resize-none text-sm outline-none ring ring-gray-700 focus:ring-indigo-500 bg-gray-800 text-gray-100 placeholder-gray-400"
+            disabled={isGenerating}
+          />
+
+          <button
+            disabled={isGenerating || !input.trim()}
+            className="absolute bottom-2 right-2 rounded-full bg-gradient-to-r from-indigo-500 to-indigo-600 text-white"
+          >
+            {isGenerating ? (
+              <Loader2Icon className="size-7 p-1.5 animate-spin" />
+            ) : (
+              <SendIcon className="size-7 p-1.5" />
+            )}
+          </button>
         </form>
       </div>
     </div>

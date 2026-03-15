@@ -15,13 +15,14 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import ProjectPreview from "../components/ProjectPreview";
-import api from '../configs/axios'
-import {toast} from 'sonner';
-import {authClient} from '@/lib/auth-client';
+import api from "../configs/axios";
+import { toast } from "sonner";
+import { authClient } from "@/lib/auth-client";
 
 const Projects = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
+
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(true);
@@ -30,38 +31,80 @@ const Projects = () => {
   );
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
   const previewRef = useRef<ProjectPreviewRef>(null);
-  const {data: session, isPending} = authClient.useSession() 
+
+  const { data: session, isPending } = authClient.useSession();
 
   const pollingRef = useRef(false);
 
-const fetchProject = async () => {
-  if (pollingRef.current) return;
-  pollingRef.current = true;
+  /* ---------------- FETCH PROJECT ---------------- */
 
-  try {
-    const { data } = await api.get(`/api/user/project/${projectId}`);
-    setProject(data.project);
+  const fetchProject = async () => {
+    if (!projectId || pollingRef.current) return;
 
-    if (data.project.current_code) {
-      setIsGenerating(false);
+    pollingRef.current = true;
+
+    try {
+      const { data } = await api.get(`/api/user/project/${projectId}`);
+
+      setProject(data.project);
+
+      if (data.project.current_code) {
+        setIsGenerating(false);
+      }
+
+      setLoading(false);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      pollingRef.current = false;
+    }
+  };
+
+  /* ---------------- SAVE PROJECT ---------------- */
+
+  const saveProject = async () => {
+    let code = previewRef.current?.getCode()?.trim();
+
+    // fallback if editor ref didn't return anything
+    if (!code && project?.current_code) {
+      code = project.current_code;
     }
 
-    setLoading(false);
-  } finally {
-    pollingRef.current = false;
-  }
-};
+    if (!code) {
+      toast.error("No code to save");
+      return;
+    }
 
-  const saveProject = async () => {};
+    setIsSaving(true);
+
+    try {
+      await api.put(`/api/project/save/${projectId}`, { code });
+
+      // refresh project from DB to guarantee persistence
+      const { data } = await api.get(`/api/user/project/${projectId}`);
+
+      setProject((prev) => (prev ? { ...prev, current_code: code } : null));
+
+      toast.success("Project saved successfully");
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to save project",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  /* ---------------- DOWNLOAD CODE ---------------- */
 
   const downloadCode = () => {
     const code = previewRef.current?.getCode() || project?.current_code;
 
-    if (!code) {
-      if (isGenerating) return;
-      return;
-    }
+    if (!code) return;
 
     const element = document.createElement("a");
     const file = new Blob([code], { type: "text/html" });
@@ -69,61 +112,85 @@ const fetchProject = async () => {
     element.href = URL.createObjectURL(file);
     element.download = "index.html";
 
-    document.body.appendChild(element); //
+    document.body.appendChild(element);
     element.click();
-    document.body.removeChild(element); //
+    document.body.removeChild(element);
   };
 
-  const togglePublish = async () => {};
+  /* ---------------- PUBLISH ---------------- */
 
-  useEffect(() => {
-    if(session?.user){
-      fetchProject()
-    }else if(!isPending && !session?.user){
-      navigate('/');
-      toast("Please login to view your projects")
+  const togglePublish = async () => {
+    try {
+      await api.get(`/api/user/publish-toggle/${projectId}`);
+
+      setProject((prev) =>
+        prev ? { ...prev, isPublished: !prev.isPublished } : null,
+      );
+
+      toast.success("Publish status updated");
+    } catch (error) {
+      toast.error("Error updating publish status");
+      console.error(error);
     }
-  }, [session?.user])
+  };
+
+  /* ---------------- AUTH CHECK ---------------- */
 
   useEffect(() => {
-  if (!projectId) return;
+    if (session?.user) {
+      fetchProject();
+    } else if (!isPending && !session?.user) {
+      navigate("/");
+      toast("Please login to view your projects");
+    }
+  }, [session?.user]);
 
-  const intervalId = setInterval(() => {
-    fetchProject();
-  }, 3000); // faster polling
+  /* ---------------- POLLING ---------------- */
 
-  return () => clearInterval(intervalId);
-}, [projectId]);
+  useEffect(() => {
+    if (!projectId || !isGenerating) return;
+
+    const interval = setInterval(() => {
+      if (!isSaving) fetchProject();
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [projectId, isSaving]);
+
+  /* ---------------- LOADING ---------------- */
 
   if (loading) {
     return (
-      <>
-        <div className="flex items-center justify-center h-screen">
-          <Loader2Icon className="size-7 animate-spin text-violet-200" />
-        </div>
-      </>
+      <div className="flex items-center justify-center h-screen">
+        <Loader2Icon className="size-7 animate-spin text-violet-200" />
+      </div>
     );
   }
+
+  /* ---------------- UI ---------------- */
+
   return project ? (
     <div className="flex flex-col h-screen w-full bg-gray-900 text-white">
-      {/* builder navbar */}
-      <div className="flex max-sm:flex-col sn:items-center gap-4 px-4 py-2 no-scrollbar">
-        {/* left */}
-        <div className="flex items-center gap-2 sm:min-w-90 text-nowrap">
+      {/* NAVBAR */}
+
+      <div className="flex max-sm:flex-col sm:items-center gap-4 px-4 py-2">
+        {/* LEFT */}
+
+        <div className="flex items-center gap-2 sm:min-w-90">
           <img
             src="/favicon.svg"
             alt="logo"
             className="h-6 cursor-pointer"
             onClick={() => navigate("/")}
           />
+
           <div className="max-w-64 sm:max-w-xs">
-            <p className="text-sm text-medium capitalize truncate">
-              {project.name}
-            </p>
-            <p className="text-xs text-gray-400 -mt-0.5">
+            <p className="text-sm capitalize truncate">{project.name}</p>
+            <p className="text-xs text-gray-400">
               Previewing last saved version
             </p>
           </div>
+
           <div className="sm:hidden flex-1 flex justify-end">
             {isMenuOpen ? (
               <MessageSquareIcon
@@ -138,30 +205,45 @@ const fetchProject = async () => {
             )}
           </div>
         </div>
-        {/* middle */}
-        <div className="hidden sm:flex gap-2 bg-gray-950 p-1.5 rounded-md ">
+
+        {/* DEVICE SWITCH */}
+
+        <div className="hidden sm:flex gap-2 bg-gray-950 p-1.5 rounded-md">
           <SmartphoneIcon
             onClick={() => setDevice("phone")}
-            className={`size-6 p-1 rounded cursor-pointer ${device === "phone" ? "bg-gray-700" : ""}`}
+            className={`size-6 p-1 rounded cursor-pointer ${
+              device === "phone" ? "bg-gray-700" : ""
+            }`}
           />
+
           <TabletIcon
             onClick={() => setDevice("tablet")}
-            className={`size-6 p-1 rounded cursor-pointer ${device === "tablet" ? "bg-gray-700" : ""}`}
+            className={`size-6 p-1 rounded cursor-pointer ${
+              device === "tablet" ? "bg-gray-700" : ""
+            }`}
           />
+
           <LaptopIcon
             onClick={() => setDevice("desktop")}
-            className={`size-6 p-1 rounded cursor-pointer ${device === "desktop" ? "bg-gray-700" : ""}`}
+            className={`size-6 p-1 rounded cursor-pointer ${
+              device === "desktop" ? "bg-gray-700" : ""
+            }`}
           />
         </div>
-        {/* right */}
-        <div
-          disabled={isSaving}
-          className="flex items-center justify-end gap-3 flex-1 text-xs sm:text-sm"
-        >
+
+        {/* RIGHT ACTIONS */}
+
+        <div className="flex items-center justify-end gap-3 flex-1 text-xs sm:text-sm">
+          {/* SAVE */}
+
           <button
             onClick={saveProject}
             disabled={isSaving}
-            className="max-sm:hidden bg-gray-800 hover:bg-gray-700 text-white px-3.5 py-1 flex items-center gap-2 rounded sm:rounded-sm transition-colors border border-gray-700"
+            className={`max-sm:hidden px-3.5 py-1 flex items-center gap-2 rounded border border-gray-700 ${
+              isSaving
+                ? "bg-gray-700 cursor-not-allowed"
+                : "bg-gray-800 hover:bg-gray-700"
+            }`}
           >
             {isSaving ? (
               <Loader2Icon className="animate-spin" size={16} />
@@ -170,32 +252,47 @@ const fetchProject = async () => {
             )}
             Save
           </button>
+
+          {/* PREVIEW */}
+
           <Link
             target="_blank"
             to={`/preview/${projectId}`}
-            className="flex items-center gap-2 px-4 py-1 rounded sm:rounded-sm border border-gray-700 hover:border-gray-500 transition-colors"
+            className="flex items-center gap-2 px-4 py-1 border border-gray-700 rounded hover:border-gray-500"
           >
-            <FullscreenIcon size={16} /> Preview
+            <FullscreenIcon size={16} />
+            Preview
           </Link>
+
+          {/* DOWNLOAD */}
+
           <button
             onClick={downloadCode}
-            className="bg-linear-to-br from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white px-3.5 py-1 flex items-center gap-2 rounded sm:rounded-sm transition-colors"
+            className="bg-gradient-to-br from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 px-3.5 py-1 flex items-center gap-2 rounded"
           >
-            <ArrowBigDownDashIcon size={16} /> Download
+            <ArrowBigDownDashIcon size={16} />
+            Download
           </button>
+
+          {/* PUBLISH */}
+
           <button
             onClick={togglePublish}
-            className="bg-linear-to-br from-indigo-700 to-indigo-600 hover:from-indigo-600 hover:to-indigo-500 text-white px-3.5 py-1 flex items-center gap-2 rounded sm:rounded-sm transition-colors"
+            className="bg-gradient-to-br from-indigo-700 to-indigo-600 hover:from-indigo-600 hover:to-indigo-500 px-3.5 py-1 flex items-center gap-2 rounded"
           >
             {project.isPublished ? (
               <EyeOffIcon size={16} />
             ) : (
               <EyeIcon size={16} />
             )}
+
             {project.isPublished ? "Unpublish" : "Publish"}
           </button>
         </div>
       </div>
+
+      {/* BUILDER */}
+
       <div className="flex-1 flex overflow-auto">
         <Sidebar
           isMenuOpen={isMenuOpen}
@@ -204,6 +301,7 @@ const fetchProject = async () => {
           isGenerating={isGenerating}
           setIsGenerating={setIsGenerating}
         />
+
         <div className="flex-1 p-2 pl-0">
           <ProjectPreview
             ref={previewRef}

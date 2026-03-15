@@ -1,31 +1,30 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { dummyProjects } from "../assets/assets";
 import { Loader2Icon } from "lucide-react";
 import ProjectPreview from "../components/ProjectPreview";
+import api from "../configs/axios";
 
 const Preview = () => {
-  const { projectId, versionId } = useParams();
+  const { projectId } = useParams();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const fetchCode = async () => {
-    setTimeout(() => {
-      const foundProject = dummyProjects.find(
-        (project) => project.id === projectId,
-      );
+  const fetchProject = async () => {
+    if (!projectId) return;
 
-      if (foundProject?.current_code) {
-        setCode(foundProject.current_code);
-      }
-
+    try {
+      const { data } = await api.get(`/api/project/preview/${projectId}`);
+      setCode(data.code);
+    } catch (error) {
+      console.error(error);
+    } finally {
       setLoading(false);
-    }, 2000);
+    }
   };
 
   useEffect(() => {
-    fetchCode();
-  }, []);
+    fetchProject();
+  }, [projectId]);
 
   if (loading) {
     return (

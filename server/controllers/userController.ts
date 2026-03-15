@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import prisma from "../lib/prisma";
 import openai from "../config/openai";
+import Stripe from "stripe";
 
 // Get User Credits
 export const getUserCredits = async (req: Request, res: Response) => {
@@ -37,22 +38,27 @@ export const createUserProject = async (req: Request, res: Response) => {
         .json({ message: "Add credits to create more projects" });
     }
     // #region agent log
-    fetch('http://127.0.0.1:7581/ingest/7f8eb351-b311-4545-adc7-018ba6be9823',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'X-Debug-Session-Id':'93afee'
+    fetch("http://127.0.0.1:7581/ingest/7f8eb351-b311-4545-adc7-018ba6be9823", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "93afee",
       },
-      body:JSON.stringify({
-        sessionId:'93afee',
-        runId:'initial',
-        hypothesisId:'H2',
-        location:'server/controllers/userController.ts:createUserProject:beforeEnhance',
-        message:'createUserProject start',
-        data:{ hasUser:!!user, initialPromptLength: typeof initial_prompt === 'string' ? initial_prompt.length : null },
-        timestamp:Date.now()
-      })
-    }).catch(()=>{});
+      body: JSON.stringify({
+        sessionId: "93afee",
+        runId: "initial",
+        hypothesisId: "H2",
+        location:
+          "server/controllers/userController.ts:createUserProject:beforeEnhance",
+        message: "createUserProject start",
+        data: {
+          hasUser: !!user,
+          initialPromptLength:
+            typeof initial_prompt === "string" ? initial_prompt.length : null,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
     // #endregion
     //Create a new project
     project = await prisma.websiteProject.create({
@@ -84,22 +90,26 @@ export const createUserProject = async (req: Request, res: Response) => {
     res.json({ projectId: project.id });
   } catch (error: any) {
     // #region agent log
-    fetch('http://127.0.0.1:7581/ingest/7f8eb351-b311-4545-adc7-018ba6be9823',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'X-Debug-Session-Id':'93afee'
+    fetch("http://127.0.0.1:7581/ingest/7f8eb351-b311-4545-adc7-018ba6be9823", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "93afee",
       },
-      body:JSON.stringify({
-        sessionId:'93afee',
-        runId:'initial',
-        hypothesisId:'H2',
-        location:'server/controllers/userController.ts:createUserProject:preGenerationCatch',
-        message:'Error before generation in createUserProject',
-        data:{ errorCode: error?.code || null, errorMessage: error?.message || null },
-        timestamp:Date.now()
-      })
-    }).catch(()=>{});
+      body: JSON.stringify({
+        sessionId: "93afee",
+        runId: "initial",
+        hypothesisId: "H2",
+        location:
+          "server/controllers/userController.ts:createUserProject:preGenerationCatch",
+        message: "Error before generation in createUserProject",
+        data: {
+          errorCode: error?.code || null,
+          errorMessage: error?.message || null,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
     // #endregion
     console.log(error.code || error.message);
     if (!res.headersSent) {
@@ -112,7 +122,7 @@ export const createUserProject = async (req: Request, res: Response) => {
   try {
     // Enhance User prompt
     const promptEnhanceResponse = await openai.chat.completions.create({
-      model: "qwen/qwen3-coder:free",
+      model: process.env.OPENAI_MODEL,
       messages: [
         {
           role: "system",
@@ -125,6 +135,7 @@ export const createUserProject = async (req: Request, res: Response) => {
             4. Including modern web design best practices
             5. Mentioning responsive design requirements
             6. Adding any missing but important elements
+import { import } from './../generated/prisma/index.d';
 
             Return ONLY the enhanced prompt, nothing else. Make it detailed but concise (2-3 paragraphs max).`,
         },
@@ -136,22 +147,25 @@ export const createUserProject = async (req: Request, res: Response) => {
     });
     const enhancedPrompt = promptEnhanceResponse.choices[0].message.content;
     // #region agent log
-    fetch('http://127.0.0.1:7581/ingest/7f8eb351-b311-4545-adc7-018ba6be9823',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'X-Debug-Session-Id':'93afee'
+    fetch("http://127.0.0.1:7581/ingest/7f8eb351-b311-4545-adc7-018ba6be9823", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "93afee",
       },
-      body:JSON.stringify({
-        sessionId:'93afee',
-        runId:'initial',
-        hypothesisId:'H2',
-        location:'server/controllers/userController.ts:createUserProject:afterEnhance',
-        message:'Enhanced prompt generated',
-        data:{ enhancedPromptLength: enhancedPrompt ? enhancedPrompt.length : null },
-        timestamp:Date.now()
-      })
-    }).catch(()=>{});
+      body: JSON.stringify({
+        sessionId: "93afee",
+        runId: "initial",
+        hypothesisId: "H2",
+        location:
+          "server/controllers/userController.ts:createUserProject:afterEnhance",
+        message: "Enhanced prompt generated",
+        data: {
+          enhancedPromptLength: enhancedPrompt ? enhancedPrompt.length : null,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
     // #endregion
     await prisma.conversation.create({
       data: {
@@ -169,10 +183,10 @@ export const createUserProject = async (req: Request, res: Response) => {
     });
     // Generate website code
     const codeGenerationResponse = await openai.chat.completions.create({
-      model: "qwen/qwen3-coder:free",
+      model: process.env.OPENAI_MODEL,
       messages: [
         {
-          role: 'system',
+          role: "system",
           content: `You are an expert web developer. Create a complete, production-ready, single-page website based on this request: "${enhancedPrompt}"
 
             CRITICAL REQUIREMENTS:
@@ -199,37 +213,37 @@ export const createUserProject = async (req: Request, res: Response) => {
             The HTML should be complete and ready to render as-is with Tailwind CSS.`,
         },
         {
-            role: 'user',
-            content: enhancedPrompt || ''
-        }
-      ]
+          role: "user",
+          content: enhancedPrompt || "",
+        },
+      ],
     });
-    const code = codeGenerationResponse.choices[0].message.content || '';
+    const code = codeGenerationResponse.choices[0].message.content || "";
     // #region agent log
-    fetch('http://127.0.0.1:7581/ingest/7f8eb351-b311-4545-adc7-018ba6be9823',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'X-Debug-Session-Id':'93afee'
+    fetch("http://127.0.0.1:7581/ingest/7f8eb351-b311-4545-adc7-018ba6be9823", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "93afee",
       },
-      body:JSON.stringify({
-        sessionId:'93afee',
-        runId:'initial',
-        hypothesisId:'H2',
-        location:'server/controllers/userController.ts:createUserProject:afterCodeGen',
-        message:'Code generation completed',
-        data:{ hasCode: !!code, codeLength: code ? code.length : 0 },
-        timestamp:Date.now()
-      })
-    }).catch(()=>{});
+      body: JSON.stringify({
+        sessionId: "93afee",
+        runId: "initial",
+        hypothesisId: "H2",
+        location:
+          "server/controllers/userController.ts:createUserProject:afterCodeGen",
+        message: "Code generation completed",
+        data: { hasCode: !!code, codeLength: code ? code.length : 0 },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
     // #endregion
-    if(!code){
+    if (!code) {
       await prisma.conversation.create({
         data: {
           role: "assistant",
-          content:
-            "Unable to generate the code. Please try again",
-          projectId: project.id
+          content: "Unable to generate the code. Please try again",
+          projectId: project.id,
         },
       });
       await prisma.user.update({
@@ -240,55 +254,60 @@ export const createUserProject = async (req: Request, res: Response) => {
     }
     // Create version for project
     const version = await prisma.version.create({
-        data: {
-            code: code.replace(/```[a-z]*\n?/gi, '')
-            .replace(/```$/g, '')
-            .trim(),
-            description: 'Initial version',
-            projectId: project.id
-        }
-    })
+      data: {
+        code: code
+          .replace(/```[a-z]*\n?/gi, "")
+          .replace(/```$/g, "")
+          .trim(),
+        description: "Initial version",
+        projectId: project.id,
+      },
+    });
     await prisma.conversation.create({
-        data: {
-            role: 'assistant',
-            content: "I've created your website! You can now preview it and request any changes.",
-            projectId: project.id
-        }
-    })
+      data: {
+        role: "assistant",
+        content:
+          "I've created your website! You can now preview it and request any changes.",
+        projectId: project.id,
+      },
+    });
     await prisma.websiteProject.update({
-        where: {id: project.id},
-        data: {
-            current_code: code.replace(/```[a-z]*\n?/gi, '')
-            .replace(/```$/g, '')
-            .trim(),
-            current_version_index: version.id
-        }
-    })
-
-
+      where: { id: project.id },
+      data: {
+        current_code: code
+          .replace(/```[a-z]*\n?/gi, "")
+          .replace(/```$/g, "")
+          .trim(),
+        current_version_index: version.id,
+      },
+    });
   } catch (error: any) {
     // #region agent log
-    fetch('http://127.0.0.1:7581/ingest/7f8eb351-b311-4545-adc7-018ba6be9823',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'X-Debug-Session-Id':'93afee'
+    fetch("http://127.0.0.1:7581/ingest/7f8eb351-b311-4545-adc7-018ba6be9823", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "93afee",
       },
-      body:JSON.stringify({
-        sessionId:'93afee',
-        runId:'initial',
-        hypothesisId:'H2',
-        location:'server/controllers/userController.ts:createUserProject:catch',
-        message:'Error in createUserProject',
-        data:{ errorCode: error?.code || null, errorMessage: error?.message || null },
-        timestamp:Date.now()
-      })
-    }).catch(()=>{});
+      body: JSON.stringify({
+        sessionId: "93afee",
+        runId: "initial",
+        hypothesisId: "H2",
+        location:
+          "server/controllers/userController.ts:createUserProject:catch",
+        message: "Error in createUserProject",
+        data: {
+          errorCode: error?.code || null,
+          errorMessage: error?.message || null,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
     // #endregion
     await prisma.user.update({
-        where: {id: userId},
-        data: {credits: {increment: 5}}
-    })
+      where: { id: userId },
+      data: { credits: { increment: 5 } },
+    });
     console.log(error.code || error.message);
     // Do not send another response here; initial response is already sent.
   }
@@ -296,74 +315,145 @@ export const createUserProject = async (req: Request, res: Response) => {
 
 // Controller function to get a single user project
 export const getUserProject = async (req: Request, res: Response) => {
-    try {
-      const userId = (req as any).userId;
-      if (!userId) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      const {projectId} = req.params;
-      const project = await prisma.websiteProject.findUnique({
-        where: {id: projectId, userId},
-        include: {
-            conversation: {
-                orderBy: {timestamp: 'asc'}
-            },
-            versions: {
-                orderBy: {timestamp: 'asc'}
-            }
-        }
-      })
-      res.json({ project });
-    } catch (error: any) {
-      console.log(error.code || error.message);
-      res.status(500).json({ message: error.message });
+  try {
+    const userId = (req as any).userId;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
+    const { projectId } = req.params;
+    const project = await prisma.websiteProject.findUnique({
+      where: { id: projectId, userId },
+      include: {
+        conversation: {
+          orderBy: { timestamp: "asc" },
+        },
+        versions: {
+          orderBy: { timestamp: "asc" },
+        },
+      },
+    });
+    res.json({ project });
+  } catch (error: any) {
+    console.log(error.code || error.message);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // Controller function to get all the user projects
 export const getUserProjects = async (req: Request, res: Response) => {
-    try {
-      const userId = (req as any).userId;
-      if (!userId) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      const projects = await prisma.websiteProject.findMany({
-        where: {userId},
-        orderBy: {updatedAt: 'desc'}
-      })
-      res.json({ projects });
-    } catch (error: any) {
-      console.log(error.code || error.message);
-      res.status(500).json({ message: error.message });
+  try {
+    const userId = (req as any).userId;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
+    const projects = await prisma.websiteProject.findMany({
+      where: { userId },
+      orderBy: { updatedAt: "desc" },
+    });
+    res.json({ projects });
+  } catch (error: any) {
+    console.log(error.code || error.message);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // Controller function to toggle project publish
 export const togglePublish = async (req: Request, res: Response) => {
-    try {
-      const userId = (req as any).userId;
-      if (!userId) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      const {projectId} = req.params;
-      const project = await prisma.websiteProject.findUnique({
-        where: {id: projectId, userId}
-      })
-      if(!project){
-        return res.status(404).json({message: 'Project not found'})
-      }
-      await prisma.websiteProject.update({
-        where: {id: projectId, userId},
-        data: {isPublished: !project.isPublished}
-      })
-      res.json({ message: project.isPublished ? 'Project Unpublished' : 'Project Published Successfully'});
-    } catch (error: any) {
-      console.log(error.code || error.message);
-      res.status(500).json({ message: error.message });
+  try {
+    const userId = (req as any).userId;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
+    const { projectId } = req.params;
+    const project = await prisma.websiteProject.findUnique({
+      where: { id: projectId, userId },
+    });
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+    await prisma.websiteProject.update({
+      where: { id: projectId, userId },
+      data: { isPublished: !project.isPublished },
+    });
+    res.json({
+      message: project.isPublished
+        ? "Project Unpublished"
+        : "Project Published Successfully",
+    });
+  } catch (error: any) {
+    console.log(error.code || error.message);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // Controller function for purchasing credits
-export const purchaseCredits = async (req:Request, res:Response) => {
-    
-}
+export const purchaseCredits = async (req: Request, res: Response) => {
+  try {
+
+    const plans = {
+      basic: { credits: 100, amount: 5 },
+      pro: { credits: 400, amount: 19 },
+      enterprise: { credits: 1000, amount: 49 },
+    };
+
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const { planId } = req.body as { planId: keyof typeof plans };
+    const origin = req.headers.origin as string;
+
+    const plan = plans[planId];
+
+    if (!plan) {
+      return res.status(404).json({ message: "Plan not found" });
+    }
+
+    const transaction = await prisma.transaction.create({
+      data: {
+        userId,
+        planId,
+        amount: plan.amount,
+        credits: plan.credits,
+      },
+    });
+
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+      apiVersion: "2024-04-10",
+    });
+
+    const session = await stripe.checkout.sessions.create({
+      success_url: `${origin}/loading`,
+      cancel_url: `${origin}`,
+      mode: "payment",
+
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: `AISiteBuilder - ${plan.credits} credits`,
+            },
+            unit_amount: plan.amount * 100,
+          },
+          quantity: 1,
+        },
+      ],
+
+      metadata: {
+        transactionId: transaction.id,
+        appId: "ai-site-builder",
+      },
+
+      expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
+    });
+
+    res.json({ payment_link: session.url });
+
+  } catch (error: any) {
+    console.log(error);
+    res.status(500).json({ message: error.message });
+  }
+};
