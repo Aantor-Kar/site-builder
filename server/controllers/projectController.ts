@@ -1,13 +1,35 @@
 import { Request, Response } from "express";
-import prisma from "../lib/prisma";
-import openai from "../config/openai";
+import prisma from "../lib/prisma.js";
+import openai from "../config/openai.js";
+
+const openaiModel = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+
+function getRouteParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function getBodyString(value: unknown) {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (Array.isArray(value) && typeof value[0] === "string") {
+    return value[0];
+  }
+
+  return "";
+}
 
 // Controller function to make revision
 export const makeRevision = async (req: Request, res: Response) => {
   const userId = (req as any).userId;
   try {
-    const { projectId } = req.params;
-    const { message } = req.body;
+    const projectId = getRouteParam(req.params.projectId);
+    const message = getBodyString(req.body?.message);
+
+    if (!projectId) {
+      return res.status(400).json({ message: "Project ID is required" });
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -41,7 +63,7 @@ export const makeRevision = async (req: Request, res: Response) => {
       })
     }).catch(()=>{});
     // #endregion
-    const currentProject = await prisma.websiteProject.findUnique({
+    const currentProject = await prisma.websiteProject.findFirst({
       where: { id: projectId, userId },
       include: { versions: true },
     });
@@ -61,7 +83,7 @@ export const makeRevision = async (req: Request, res: Response) => {
     });
     // Enhance user prompt
     const promptEnhanceResponse = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL,
+      model: openaiModel,
       messages: [
         {
           role: "system",
@@ -116,7 +138,7 @@ export const makeRevision = async (req: Request, res: Response) => {
     });
     // Generate website code
     const codeGenerationResponse = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL,
+      model: openaiModel,
       messages: [
         {
           role: "system",
@@ -238,8 +260,16 @@ export const rollbackToVersion = async (req: Request, res: Response) => {
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
-    const { projectId, versionId } = req.params;
-    const project = await prisma.websiteProject.findUnique({
+    const projectId = getRouteParam(req.params.projectId);
+    const versionId = getRouteParam(req.params.versionId);
+
+    if (!projectId || !versionId) {
+      return res
+        .status(400)
+        .json({ message: "Project ID and version ID are required" });
+    }
+
+    const project = await prisma.websiteProject.findFirst({
       where: { id: projectId, userId },
       include: { versions: true },
     });
@@ -247,13 +277,13 @@ export const rollbackToVersion = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Project not found" });
     }
     const version = project.versions.find(
-      (version) => version.id === versionId,
+      (version: { id: string }) => version.id === versionId,
     );
     if (!version) {
       return res.status(404).json({ message: "Version not found" });
     }
     await prisma.websiteProject.update({
-      where: { id: projectId, userId },
+      where: { id: projectId },
       data: {
         current_code: version.code,
         current_version_index: version.id,
@@ -278,10 +308,19 @@ export const rollbackToVersion = async (req: Request, res: Response) => {
 export const deleteProject = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;
-    const { projectId } = req.params;
-    await prisma.websiteProject.delete({
+    const projectId = getRouteParam(req.params.projectId);
+
+    if (!projectId) {
+      return res.status(400).json({ message: "Project ID is required" });
+    }
+
+    const deletedProject = await prisma.websiteProject.deleteMany({
       where: { id: projectId, userId },
     });
+
+    if (!deletedProject.count) {
+      return res.status(404).json({ message: "Project not found" });
+    }
 
     res.json({ message: "Project deleted successfully" });
   } catch (error: any) {
@@ -294,7 +333,11 @@ export const deleteProject = async (req: Request, res: Response) => {
 export const getProjectPreview = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;
-    const { projectId } = req.params;
+    const projectId = getRouteParam(req.params.projectId);
+
+    if (!projectId) {
+      return res.status(400).json({ message: "Project ID is required" });
+    }
 
     const project = await prisma.websiteProject.findFirst({
   where: { id: projectId, userId },
@@ -335,7 +378,12 @@ export const getPublishedProjects = async (req: Request, res: Response) => {
 // Get a single project by id
 export const getProjectId = async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const projectId = getRouteParam(req.params.projectId);
+
+    if (!projectId) {
+      return res.status(400).json({ message: "Project ID is required" });
+    }
+
     const project = await prisma.websiteProject.findFirst({
       where: { id: projectId },
     });
@@ -354,11 +402,15 @@ export const getProjectId = async (req: Request, res: Response) => {
 export const saveProjectCode = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;
-    const { projectId } = req.params;
-    const { code } = req.body;
+    const projectId = getRouteParam(req.params.projectId);
+    const code = getBodyString(req.body?.code);
 
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (!projectId) {
+      return res.status(400).json({ message: "Project ID is required" });
     }
 
     if (!code) {

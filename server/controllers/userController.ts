@@ -1,7 +1,25 @@
 import { Request, Response } from "express";
-import prisma from "../lib/prisma";
-import openai from "../config/openai";
+import prisma from "../lib/prisma.js";
+import openai from "../config/openai.js";
 import Stripe from "stripe";
+
+const openaiModel = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+
+function getRouteParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function getBodyString(value: unknown) {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (Array.isArray(value) && typeof value[0] === "string") {
+    return value[0];
+  }
+
+  return "";
+}
 
 // Get User Credits
 export const getUserCredits = async (req: Request, res: Response) => {
@@ -24,7 +42,7 @@ export const getUserCredits = async (req: Request, res: Response) => {
 export const createUserProject = async (req: Request, res: Response) => {
   const userId = (req as any).userId;
   let project;
-  const { initial_prompt } = req.body;
+  const initial_prompt = getBodyString(req.body?.initial_prompt);
   try {
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -37,6 +55,11 @@ export const createUserProject = async (req: Request, res: Response) => {
         .status(403)
         .json({ message: "Add credits to create more projects" });
     }
+
+    if (!initial_prompt.trim()) {
+      return res.status(400).json({ message: "Initial prompt is required" });
+    }
+
     // #region agent log
     fetch("http://127.0.0.1:7581/ingest/7f8eb351-b311-4545-adc7-018ba6be9823", {
       method: "POST",
@@ -122,7 +145,7 @@ export const createUserProject = async (req: Request, res: Response) => {
   try {
     // Enhance User prompt
     const promptEnhanceResponse = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL,
+      model: openaiModel,
       messages: [
         {
           role: "system",
@@ -183,7 +206,7 @@ import { import } from './../generated/prisma/index.d';
     });
     // Generate website code
     const codeGenerationResponse = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL,
+      model: openaiModel,
       messages: [
         {
           role: "system",
@@ -320,8 +343,13 @@ export const getUserProject = async (req: Request, res: Response) => {
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
-    const { projectId } = req.params;
-    const project = await prisma.websiteProject.findUnique({
+    const projectId = getRouteParam(req.params.projectId);
+
+    if (!projectId) {
+      return res.status(400).json({ message: "Project ID is required" });
+    }
+
+    const project = await prisma.websiteProject.findFirst({
       where: { id: projectId, userId },
       include: {
         conversation: {
@@ -332,6 +360,10 @@ export const getUserProject = async (req: Request, res: Response) => {
         },
       },
     });
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
     res.json({ project });
   } catch (error: any) {
     console.log(error.code || error.message);
@@ -364,15 +396,20 @@ export const togglePublish = async (req: Request, res: Response) => {
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
-    const { projectId } = req.params;
-    const project = await prisma.websiteProject.findUnique({
+    const projectId = getRouteParam(req.params.projectId);
+
+    if (!projectId) {
+      return res.status(400).json({ message: "Project ID is required" });
+    }
+
+    const project = await prisma.websiteProject.findFirst({
       where: { id: projectId, userId },
     });
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
     }
     await prisma.websiteProject.update({
-      where: { id: projectId, userId },
+      where: { id: projectId },
       data: { isPublished: !project.isPublished },
     });
     res.json({
@@ -420,9 +457,7 @@ export const purchaseCredits = async (req: Request, res: Response) => {
       },
     });
 
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-      apiVersion: "2024-04-10",
-    });
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
     const session = await stripe.checkout.sessions.create({
       success_url: `${origin}/loading`,

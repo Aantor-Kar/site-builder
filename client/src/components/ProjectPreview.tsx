@@ -1,7 +1,8 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { iframeScript } from "../assets/assets";
 import EditorPanel from "./EditorPanel";
 import LoaderSteps from "./LoaderSteps.tsx"
+import type { Project } from "../types";
 
 interface ProjectPreviewProps {
   project: Project;
@@ -35,9 +36,10 @@ const ProjectPreview = forwardRef<ProjectPreviewRef, ProjectPreviewProps>(
 
         // 1. Remove our selection class/ attributes/ outline from all elements
         doc.querySelectorAll('.ai-selected-element, [data-ai-selected]').forEach((el)=>{
-          el.classList.remove('ai-selected-element')
-          el.removeAttribute('data-ai-selected')
-          (el as HTMLElement).style.outline = ''
+          el.classList.remove('ai-selected-element');
+          el.removeAttribute('data-ai-selected');
+          (el as HTMLElement).style.outline = '';
+        })
 
         // 2. Remove injected style + script from the document
         const previewStyle = doc.getElementById('ai-preview-style')
@@ -46,9 +48,7 @@ const ProjectPreview = forwardRef<ProjectPreviewRef, ProjectPreviewProps>(
         if(previewScript) previewScript.remove()
         
         // 3. Serialize clean HTML
-        const html = doc.documentElement.outerHTML
-        return HTML
-        }) 
+        return `<!DOCTYPE html>\n${doc.documentElement.outerHTML}`
       }
     }))
 

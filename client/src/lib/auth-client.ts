@@ -1,23 +1,14 @@
-import { createAuthClient } from "better-auth/react";
+import { useAuth } from "@/context/AuthContext";
 
-function normalizeAppBaseURL(raw: string | undefined) {
-  const base = (raw ?? "").trim().replace(/\/+$/, "");
-  if (!base) {
-    // Dev-friendly fallback: if the env isn't loaded, assume API is on port 3000
-    // on the same host as the frontend.
-    if (typeof window !== "undefined") {
-      const { protocol, hostname } = window.location;
-      return `${protocol}//${hostname}:3000`;
-    }
-    return undefined;
-  }
-  return base.replace(/\/api\/auth$/i, "");
-}
+export const authClient = {
+  useSession: () => {
+    const { session, isPending } = useAuth();
 
-export const authClient = createAuthClient({
-  // Better Auth will append `basePath` (default: `/api/auth`) to `baseURL` internally.
-  baseURL: normalizeAppBaseURL(import.meta.env.VITE_BASEURL),
-  fetchOptions: { credentials: "include" },
-});
+    return {
+      data: session,
+      isPending,
+    };
+  },
+};
 
-export const { signIn, signUp, useSession } = authClient;
+export const useSession = authClient.useSession;

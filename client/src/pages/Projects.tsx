@@ -11,13 +11,15 @@ import {
   TabletIcon,
   XIcon,
 } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import ProjectPreview from "../components/ProjectPreview";
 import api from "../configs/axios";
 import { toast } from "sonner";
-import { authClient } from "@/lib/auth-client";
+import { useAuth } from "@/context/AuthContext";
+import type { Project } from "../types";
+import type { ProjectPreviewRef } from "../components/ProjectPreview";
 
 const Projects = () => {
   const { projectId } = useParams();
@@ -34,7 +36,7 @@ const Projects = () => {
 
   const previewRef = useRef<ProjectPreviewRef>(null);
 
-  const { data: session, isPending } = authClient.useSession();
+  const { session, isPending } = useAuth();
 
   const pollingRef = useRef(false);
 
@@ -83,7 +85,7 @@ const Projects = () => {
       await api.put(`/api/project/save/${projectId}`, { code });
 
       // refresh project from DB to guarantee persistence
-      const { data } = await api.get(`/api/user/project/${projectId}`);
+      await api.get(`/api/user/project/${projectId}`);
 
       setProject((prev) => (prev ? { ...prev, current_code: code } : null));
 
@@ -138,12 +140,12 @@ const Projects = () => {
 
   useEffect(() => {
     if (session?.user) {
-      fetchProject();
+      void fetchProject();
     } else if (!isPending && !session?.user) {
-      navigate("/");
+      navigate("/auth/signin");
       toast("Please login to view your projects");
     }
-  }, [session?.user]);
+  }, [isPending, navigate, session?.user]);
 
   /* ---------------- POLLING ---------------- */
 

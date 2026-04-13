@@ -1,12 +1,12 @@
 import { Loader2Icon } from "lucide-react";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {authClient} from '@/lib/auth-client';
+import { useAuth } from "@/context/AuthContext";
 import {toast} from 'sonner';
 import api from '../configs/axios.ts'
 
 const Home = () => {
-  const {data: session} = authClient.useSession();
+  const { session } = useAuth();
   const navigate = useNavigate()
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -16,8 +16,11 @@ const Home = () => {
     try {
       if(!session?.user){
         toast.error('Please sign in to create a project')
+        navigate("/auth/signin");
+        return;
       }else if(!input.trim()){
         toast.error('Please enter a message')
+        return;
       }
       setLoading(true);
       const {data} = await api.post('/api/user/project', {initial_prompt: input});

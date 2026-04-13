@@ -1,0 +1,12 @@
+import express from "express";
+import { changePassword, deleteAccount, getSession, signIn, signOut, signUp, updateProfile, } from "../controllers/authController.js";
+import { protect } from "../middlewares/auth.js";
+const authRouter = express.Router();
+authRouter.get("/session", getSession);
+authRouter.post("/signup", signUp);
+authRouter.post("/signin", signIn);
+authRouter.post("/signout", signOut);
+authRouter.patch("/profile", protect, updateProfile);
+authRouter.post("/change-password", protect, changePassword);
+authRouter.delete("/account", protect, deleteAccount);
+export default authRouter;

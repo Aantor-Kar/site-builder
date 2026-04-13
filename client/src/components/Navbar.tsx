@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { assets } from "../assets/assets";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { authClient } from "@/lib/auth-client";
-import { UserButton } from "@daveyplate/better-auth-ui";
+import { useAuth } from "@/context/AuthContext";
 import api from '@/configs/axios';
 import {toast} from 'sonner';
 
 const Navbar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const navigate = useNavigate();
-  const { data: session } = authClient.useSession();
+  const { session, signOut } = useAuth();
   const [credits, setCredits] = useState(0)
 
   const getCredits = async () => {
@@ -25,6 +25,8 @@ const Navbar = () => {
   useEffect(() => {
     if(session?.user){
       getCredits();
+    } else {
+      setCredits(0);
     }
   }, [session?.user]);
 
@@ -32,6 +34,22 @@ const Navbar = () => {
   useEffect(() => {
     document.body.style.overflow = menuOpen ? "hidden" : "auto";
   }, [menuOpen]);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      setProfileMenuOpen(false);
+      navigate("/");
+      toast.success("Signed out successfully");
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || error.message);
+    }
+  };
+
+  const userInitial =
+    session?.user?.name?.trim()?.charAt(0)?.toUpperCase() ||
+    session?.user?.email?.charAt(0)?.toUpperCase() ||
+    "U";
 
   return (
     <header className="relative">
@@ -75,7 +93,41 @@ const Navbar = () => {
           ) : (
             <>
               <button className='bg-white/10 px-5 py-1.5 text-xs sm:text-sm border text-gray-200 rounded-full'>Credits : <span className='text-indigo-300'>{credits}</span></button>
-              <UserButton size='icon' />
+              <div className="relative">
+                <button
+                  onClick={() => setProfileMenuOpen((open) => !open)}
+                  className="flex size-10 items-center justify-center rounded-full border border-white/10 bg-indigo-500/20 text-sm font-semibold uppercase transition hover:border-indigo-300"
+                >
+                  {userInitial}
+                </button>
+                {profileMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-white/10 bg-slate-950/95 p-2 text-sm shadow-2xl shadow-black/40">
+                    <div className="border-b border-white/10 px-3 py-2">
+                      <p className="font-medium text-white">
+                        {session.user.name ?? "Account"}
+                      </p>
+                      <p className="truncate text-xs text-gray-400">
+                        {session.user.email}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setProfileMenuOpen(false);
+                        navigate("/account/settings");
+                      }}
+                      className="mt-2 w-full rounded-xl px-3 py-2 text-left text-gray-200 transition hover:bg-white/10"
+                    >
+                      Account settings
+                    </button>
+                    <button
+                      onClick={handleSignOut}
+                      className="w-full rounded-xl px-3 py-2 text-left text-red-300 transition hover:bg-red-500/10"
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                )}
+              </div>
             </>
           )}
 
@@ -117,6 +169,26 @@ const Navbar = () => {
           <Link to="/pricing" onClick={() => setMenuOpen(false)}>
             Pricing
           </Link>
+          {session?.user ? (
+            <>
+              <Link to="/account/settings" onClick={() => setMenuOpen(false)}>
+                Settings
+              </Link>
+              <button onClick={handleSignOut} className="rounded-md bg-white/10 px-4 py-2">
+                Sign out
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => {
+                setMenuOpen(false);
+                navigate("/auth/signin");
+              }}
+              className="rounded-md bg-indigo-600 px-4 py-2"
+            >
+              Sign in
+            </button>
+          )}
 
           <button
             onClick={() => setMenuOpen(false)}

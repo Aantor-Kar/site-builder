@@ -1,14 +1,16 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Project } from "../types";
 import { Loader2Icon, PlusIcon, TrashIcon } from "lucide-react";
 import api from "../configs/axios";
 import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 
 const MyProjects = () => {
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const navigate = useNavigate();
+  const { session, isPending } = useAuth();
 
   /* ---------------- FETCH PROJECTS ---------------- */
 
@@ -41,8 +43,14 @@ const MyProjects = () => {
   };
 
   useEffect(() => {
-    fetchProjects();
-  }, []);
+    if (session?.user) {
+      void fetchProjects();
+    } else if (!isPending) {
+      setLoading(false);
+      navigate("/auth/signin");
+      toast.error("Please sign in to see your projects");
+    }
+  }, [isPending, navigate, session?.user]);
 
   return (
     <div className="px-4 md:px-16 lg:px-24 xl:px-32">

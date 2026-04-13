@@ -1,5 +1,5 @@
-import { protect } from './../middlewares/auth';
-import { getUserCredits, createUserProject, getUserProject, getUserProjects, togglePublish, purchaseCredits } from './../controllers/userController';
+import { protect } from './../middlewares/auth.js';
+import { getUserCredits, createUserProject, getUserProject, getUserProjects, togglePublish, purchaseCredits } from './../controllers/userController.js';
 import express from 'express';
 
 const userRouter = express.Router();

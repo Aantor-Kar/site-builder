@@ -1,5 +1,5 @@
-import { makeRevision, saveProjectCode, rollbackToVersion, deleteProject, getProjectPreview, getPublishedProjects, getProjectId } from './../controllers/projectController';
-import { protect } from './../middlewares/auth';
+import { makeRevision, saveProjectCode, rollbackToVersion, deleteProject, getProjectPreview, getPublishedProjects, getProjectId } from './../controllers/projectController.js';
+import { protect } from './../middlewares/auth.js';
 import express from 'express';
 
 const projectRouter = express.Router();

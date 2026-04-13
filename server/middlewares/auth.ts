@@ -1,30 +1,31 @@
-import { auth } from "../lib/auth";
-import { Request, Response, NextFunction } from "express";
-import { fromNodeHeaders } from "better-auth/node";
-
-interface AuthRequest extends Request {
-  userId?: string;
-}
+import type { NextFunction, Request, Response } from "express";
+import { clearSessionCookie, getSessionFromRequest } from "../lib/session.js";
 
 export const protect = async (
-  req: AuthRequest,
+  req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
-    const session = await auth.api.getSession({
-      headers: fromNodeHeaders(req.headers)
-    });
+    const session = await getSessionFromRequest(req);
 
-    if (!session || !session.user) {
+    if (!session?.user) {
+      clearSessionCookie(res);
       return res.status(401).json({ message: "Unauthorized User" });
     }
 
     req.userId = session.user.id;
+    req.user = {
+      id: session.user.id,
+      email: session.user.email,
+      name: session.user.name,
+      image: session.user.image,
+    };
 
     next();
   } catch (error: any) {
-    console.log(error);
-    res.status(401).json({ message: error.code || error.message });
+    console.log(error.code || error.message);
+    clearSessionCookie(res);
+    return res.status(401).json({ message: "Unauthorized User" });
   }
 };

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { Loader2Icon } from "lucide-react";
 import ProjectPreview from "../components/ProjectPreview";
 import api from "../configs/axios";
+import type { Project } from "../types";
 
 const Preview = () => {
   const { projectId } = useParams();
