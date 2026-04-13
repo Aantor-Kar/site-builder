@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { dummyProjects } from "../assets/assets";
 import { Loader2Icon } from "lucide-react";
 import ProjectPreview from "../components/ProjectPreview";
 import type { Project } from "../types";
+import api from "../configs/axios";
+import { toast } from "sonner";
 
 const View = () => {
   const { projectId } = useParams();
@@ -11,22 +12,25 @@ const View = () => {
   const [loading, setLoading] = useState(true);
 
   const fetchCode = async () => {
-    setTimeout(() => {
-      const foundProject = dummyProjects.find(
-        (project) => project.id === projectId,
-      );
-
-      if (foundProject?.current_code) {
-        setCode(foundProject.current_code);
-      }
-
+    if (!projectId) {
       setLoading(false);
-    }, 2000);
+      return;
+    }
+
+    try {
+      const { data } = await api.get(`/api/project/published/${projectId}`);
+      setCode(data.code);
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to load this published project");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    fetchCode();
-  }, []);
+    void fetchCode();
+  }, [projectId]);
 
   if (loading) {
     return (
