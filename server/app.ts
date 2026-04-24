@@ -18,6 +18,10 @@ function escapeRegex(value: string) {
 }
 
 function matchesOriginPattern(origin: string, pattern: string) {
+  if (pattern === "*") {
+    return true;
+  }
+
   if (origin === pattern) {
     return true;
   }
@@ -26,10 +30,12 @@ function matchesOriginPattern(origin: string, pattern: string) {
     return false;
   }
 
-  const regex = new RegExp(
-    `^${escapeRegex(pattern).replace(/\\\*/g, ".*")}$`,
-    "i",
-  );
+  const escapedPattern = pattern
+    .split("*")
+    .map((segment) => escapeRegex(segment))
+    .join(".*");
+
+  const regex = new RegExp(`^${escapedPattern}$`, "i");
 
   return regex.test(origin);
 }
@@ -44,18 +50,19 @@ const app = express();
 
 app.set("trust proxy", 1);
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin) {
-        return callback(null, true);
-      }
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin) {
+      return callback(null, true);
+    }
 
-      return callback(null, isAllowedOrigin(origin));
-    },
-    credentials: true,
-  }),
-);
+    return callback(null, isAllowedOrigin(origin));
+  },
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 
 app.post("/api/stripe", express.raw({ type: "application/json" }), stripeWebhooks);
 app.use(express.json({ limit: "50mb" }));
