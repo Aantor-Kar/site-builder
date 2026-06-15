@@ -38,29 +38,81 @@ const Projects = () => {
 
   const { session, isPending } = useAuth();
 
-  const pollingRef = useRef(false);
+  const generationBaselineRef = useRef<{
+    versions: number;
+    conversation: number;
+    hadCode: boolean;
+  } | null>(null);
+  const wasGeneratingRef = useRef(false);
+
+  const shouldStopGenerating = (projectData: Project) => {
+    const baseline = generationBaselineRef.current;
+    if (!baseline) {
+      return false;
+    }
+
+    const versions = projectData.versions?.length ?? 0;
+    const conversations = projectData.conversation ?? [];
+    const lastAssistant = [...conversations]
+      .reverse()
+      .find((message) => message.role === "assistant");
+    const lastContent = lastAssistant?.content?.toLowerCase() ?? "";
+
+    if (
+      lastContent.includes("unable to generate") ||
+      lastContent.includes("something went wrong")
+    ) {
+      return true;
+    }
+
+    if (versions > baseline.versions) {
+      return true;
+    }
+
+    if (!baseline.hadCode && projectData.current_code && versions > 0) {
+      return true;
+    }
+
+    return false;
+  };
+
+  useEffect(() => {
+    const startedGenerating = isGenerating && !wasGeneratingRef.current;
+    const projectBecameAvailable =
+      isGenerating && project && !generationBaselineRef.current;
+
+    if ((startedGenerating || projectBecameAvailable) && project) {
+      generationBaselineRef.current = {
+        versions: project.versions?.length ?? 0,
+        conversation: project.conversation?.length ?? 0,
+        hadCode: Boolean(project.current_code),
+      };
+    }
+
+    if (!isGenerating) {
+      generationBaselineRef.current = null;
+    }
+
+    wasGeneratingRef.current = isGenerating;
+  }, [isGenerating, project, project?.id]);
 
   /* ---------------- FETCH PROJECT ---------------- */
 
   const fetchProject = async () => {
-    if (!projectId || pollingRef.current) return;
-
-    pollingRef.current = true;
+    if (!projectId) return;
 
     try {
       const { data } = await api.get(`/api/user/project/${projectId}`);
 
       setProject(data.project);
 
-      if (data.project.current_code) {
+      if (shouldStopGenerating(data.project)) {
         setIsGenerating(false);
       }
 
       setLoading(false);
     } catch (error) {
       console.error(error);
-    } finally {
-      pollingRef.current = false;
     }
   };
 
@@ -153,11 +205,13 @@ const Projects = () => {
     if (!projectId || !isGenerating) return;
 
     const interval = setInterval(() => {
-      if (!isSaving) fetchProject();
+      if (!isSaving) {
+        void fetchProject();
+      }
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [projectId, isSaving]);
+  }, [projectId, isGenerating, isSaving]);
 
   /* ---------------- LOADING ---------------- */
 

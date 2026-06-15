@@ -66,28 +66,24 @@ const Sidebar = ({
 
     if (!input.trim()) return;
 
-    setIsGenerating(true);
+    const revisionMessage = input.trim();
+    setInput("");
 
     try {
       await api.post(`/api/project/revision/${project.id}`, {
-        message: input,
+        message: revisionMessage,
       });
 
       const projectRes = await api.get(`/api/user/project/${project.id}`);
-
       setProject(projectRes.data.project);
-
-      setInput("");
-
-      toast.success("Changes applied");
+      setIsGenerating(true);
+      toast.success("Revision started");
     } catch (error: any) {
       toast.error(
         error?.response?.data?.message ||
           error?.message ||
           "Revision failed"
       );
-    } finally {
-      setIsGenerating(false);
     }
   };
 

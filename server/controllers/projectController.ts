@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import prisma from "../lib/prisma.js";
 import openai from "../config/openai.js";
+import { scheduleBackgroundTask } from "../lib/backgroundTask.js";
 
 const openaiModel = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
 
@@ -23,10 +24,11 @@ function getBodyString(value: unknown) {
 // Controller function to make revision
 export const makeRevision = async (req: Request, res: Response) => {
   const userId = (req as any).userId;
-  try {
-    const projectId = getRouteParam(req.params.projectId);
-    const message = getBodyString(req.body?.message);
+  const projectId = getRouteParam(req.params.projectId);
+  const message = getBodyString(req.body?.message);
+  let currentProject;
 
+  try {
     if (!projectId) {
       return res.status(400).json({ message: "Project ID is required" });
     }
@@ -42,34 +44,18 @@ export const makeRevision = async (req: Request, res: Response) => {
         .status(403)
         .json({ message: "Add more credits to make changes" });
     }
-    if (!message || message.trim() === "") {
+    if (!message.trim()) {
       return res.status(400).json({ message: "Please enter a valid prompt" });
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7581/ingest/7f8eb351-b311-4545-adc7-018ba6be9823',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'X-Debug-Session-Id':'93afee'
-      },
-      body:JSON.stringify({
-        sessionId:'93afee',
-        runId:'revision',
-        hypothesisId:'H1',
-        location:'server/controllers/projectController.ts:makeRevision:start',
-        message:'makeRevision called',
-        data:{ projectId, hasMessage: !!message, messageLength: typeof message === 'string' ? message.length : null },
-        timestamp:Date.now()
-      })
-    }).catch(()=>{});
-    // #endregion
-    const currentProject = await prisma.websiteProject.findFirst({
+
+    currentProject = await prisma.websiteProject.findFirst({
       where: { id: projectId, userId },
       include: { versions: true },
     });
     if (!currentProject) {
       return res.status(404).json({ message: "Project not found" });
     }
+
     await prisma.conversation.create({
       data: {
         role: "user",
@@ -81,13 +67,24 @@ export const makeRevision = async (req: Request, res: Response) => {
       where: { id: userId },
       data: { credits: { decrement: 5 } },
     });
-    // Enhance user prompt
-    const promptEnhanceResponse = await openai.chat.completions.create({
-      model: openaiModel,
-      messages: [
-        {
-          role: "system",
-          content: `You are a prompt enhancement specialist. The user wants to make changes to their website. Enhance their request to be more specific and actionable for a web developer.
+
+    res.json({ message: "Revision started" });
+  } catch (error: any) {
+    console.log(error.code || error.message);
+    if (!res.headersSent) {
+      return res.status(500).json({ message: error.message });
+    }
+    return;
+  }
+
+  const revisionTask = (async () => {
+    try {
+      const promptEnhanceResponse = await openai.chat.completions.create({
+        model: openaiModel,
+        messages: [
+          {
+            role: "system",
+            content: `You are a prompt enhancement specialist. The user wants to make changes to their website. Enhance their request to be more specific and actionable for a web developer.
 
             Enhance this by:
             1. Being specific about what elements to change
@@ -96,161 +93,116 @@ export const makeRevision = async (req: Request, res: Response) => {
             4. Using clear technical terms
 
             Return ONLY the enhanced request, nothing else. Keep it concise (1-2 sentences).`,
+          },
+          {
+            role: "user",
+            content: `User's request: "${message}"`,
+          },
+        ],
+      });
+      const enhancedPrompt = promptEnhanceResponse.choices[0].message.content;
+
+      await prisma.conversation.create({
+        data: {
+          role: "assistant",
+          content: `I've enhanced your prompt to: "${enhancedPrompt}"`,
+          projectId,
         },
-        {
-          role: "user",
-          content: `User's request: "${message}"`,
+      });
+      await prisma.conversation.create({
+        data: {
+          role: "assistant",
+          content: "Now making changes to your website...",
+          projectId,
         },
-      ],
-    });
-    const enhancedPrompt = promptEnhanceResponse.choices[0].message.content;
-    // #region agent log
-    fetch('http://127.0.0.1:7581/ingest/7f8eb351-b311-4545-adc7-018ba6be9823',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'X-Debug-Session-Id':'93afee'
-      },
-      body:JSON.stringify({
-        sessionId:'93afee',
-        runId:'revision',
-        hypothesisId:'H1',
-        location:'server/controllers/projectController.ts:makeRevision:afterEnhance',
-        message:'Enhanced prompt generated for revision',
-        data:{ enhancedPromptLength: enhancedPrompt ? enhancedPrompt.length : null },
-        timestamp:Date.now()
-      })
-    }).catch(()=>{});
-    // #endregion
-    await prisma.conversation.create({
-      data: {
-        role: "assistant",
-        content: `I've enhanced your prompt to: "${enhancedPrompt}"`,
-        projectId,
-      },
-    });
-    await prisma.conversation.create({
-      data: {
-        role: "assistant",
-        content: "Now making changes to your website...",
-        projectId,
-      },
-    });
-    // Generate website code
-    const codeGenerationResponse = await openai.chat.completions.create({
-      model: openaiModel,
-      messages: [
-        {
-          role: "system",
-          content: `You are an expert web developer. 
+      });
+
+      const codeGenerationResponse = await openai.chat.completions.create({
+        model: openaiModel,
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert web developer.
 
             CRITICAL REQUIREMENTS:
             - Return ONLY the complete updated HTML code with the requested changes.
             - Use Tailwind CSS for ALL styling (NO custom CSS).
+            - Include this EXACT script in the <head>: <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
             - Use Tailwind utility classes for all styling changes.
             - Include all JavaScript in <script> tags before closing </body>
             - Make sure it's a complete, standalone HTML document with Tailwind CSS
             - Return the HTML Code Only, nothing else
 
             Apply the requested changes while maintaining the Tailwind CSS styling approach.`,
+          },
+          {
+            role: "user",
+            content: `Here is the current website code: "${currentProject?.current_code ?? ""}" The user wants this change: "${enhancedPrompt}"`,
+          },
+        ],
+      });
+
+      const code = codeGenerationResponse.choices[0].message.content || "";
+      if (!code) {
+        await prisma.conversation.create({
+          data: {
+            role: "assistant",
+            content: "Unable to generate the code. Please try again",
+            projectId,
+          },
+        });
+        await prisma.user.update({
+          where: { id: userId },
+          data: { credits: { increment: 5 } },
+        });
+        return;
+      }
+
+      const cleanedCode = code
+        .replace(/```[a-z]*\n?/gi, "")
+        .replace(/```$/g, "")
+        .trim();
+
+      const version = await prisma.version.create({
+        data: {
+          code: cleanedCode,
+          description: "Changes made",
+          projectId,
         },
-        {
-          role: "user",
-          content: `Here is the current website code: "${currentProject.current_code}" The user wants this change: "${enhancedPrompt}"`,
-        },
-      ],
-    });
-    const code = codeGenerationResponse.choices[0].message.content || "";
-    // #region agent log
-    fetch('http://127.0.0.1:7581/ingest/7f8eb351-b311-4545-adc7-018ba6be9823',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'X-Debug-Session-Id':'93afee'
-      },
-      body:JSON.stringify({
-        sessionId:'93afee',
-        runId:'revision',
-        hypothesisId:'H1',
-        location:'server/controllers/projectController.ts:makeRevision:afterCodeGen',
-        message:'Code generation completed for revision',
-        data:{ hasCode: !!code, codeLength: code ? code.length : 0 },
-        timestamp:Date.now()
-      })
-    }).catch(()=>{});
-    // #endregion
-    if(!code){
+      });
       await prisma.conversation.create({
         data: {
           role: "assistant",
           content:
-            "Unable to generate the code. Please try again",
+            "I've made the changes to your website! You can now preview it and request any further changes.",
           projectId,
         },
       });
+      await prisma.websiteProject.update({
+        where: { id: projectId },
+        data: {
+          current_code: cleanedCode,
+          current_version_index: version.id,
+        },
+      });
+    } catch (error: any) {
       await prisma.user.update({
         where: { id: userId },
         data: { credits: { increment: 5 } },
       });
-      return;
+      await prisma.conversation.create({
+        data: {
+          role: "assistant",
+          content:
+            "Something went wrong while applying your changes. Please try again.",
+          projectId,
+        },
+      });
+      console.log(error.code || error.message);
     }
-    // Update version
-    const version = await prisma.version.create({
-      data: {
-        code: code
-          .replace(/```[a-z]*\n?/gi, "")
-          .replace(/```$/g, "")
-          .trim(),
-        description: "Changes made",
-        projectId,
-      },
-    });
-    await prisma.conversation.create({
-      data: {
-        role: "assistant",
-        content:
-          "I've made the changes to your website! You can now preview it and request any further changes.",
-        projectId,
-      },
-    });
-    await prisma.websiteProject.update({
-      where: { id: projectId },
-      data: {
-        current_code: code
-          .replace(/```[a-z]*\n?/gi, "")
-          .replace(/```$/g, "")
-          .trim(),
-        current_version_index: version.id,
-      },
-    });
+  })();
 
-    res.json({ message: "Changes made successfully" });
-  } catch (error: any) {
-    // #region agent log
-    fetch('http://127.0.0.1:7581/ingest/7f8eb351-b311-4545-adc7-018ba6be9823',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'X-Debug-Session-Id':'93afee'
-      },
-      body:JSON.stringify({
-        sessionId:'93afee',
-        runId:'revision',
-        hypothesisId:'H1',
-        location:'server/controllers/projectController.ts:makeRevision:catch',
-        message:'Error in makeRevision',
-        data:{ errorCode: error?.code || null, errorMessage: error?.message || null },
-        timestamp:Date.now()
-      })
-    }).catch(()=>{});
-    // #endregion
-    await prisma.user.update({
-      where: { id: userId },
-      data: { credits: { increment: 5 } },
-    });
-    console.log(error.code || error.message);
-    res.status(500).json({ message: error.message });
-  }
+  scheduleBackgroundTask(revisionTask);
 };
 
 // Controller function to rollback to a specific version

@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { assets } from "../assets/assets";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import api from '@/configs/axios';
-import {toast} from 'sonner';
+import { toast } from "sonner";
 
 const Navbar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
