@@ -42,6 +42,11 @@ function matchesOriginPattern(origin: string, pattern: string) {
 
 function isAllowedOrigin(origin: string) {
   const allowedOrigins = parseOrigins(process.env.TRUSTED_ORIGINS);
+  
+  // If no TRUSTED_ORIGINS are configured, allow all origins in development
+  if (allowedOrigins.length === 0 && process.env.NODE_ENV !== "production") {
+    return true;
+  }
 
   return allowedOrigins.some((pattern) => matchesOriginPattern(origin, pattern));
 }
@@ -56,9 +61,15 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    return callback(null, isAllowedOrigin(origin));
+    const isAllowed = isAllowedOrigin(origin);
+    if (!isAllowed && process.env.NODE_ENV === "production") {
+      return callback(new Error("Not allowed by CORS"));
+    }
+    return callback(null, true);
   },
   credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 };
 
 app.use(cors(corsOptions));

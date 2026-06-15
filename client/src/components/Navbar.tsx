@@ -9,26 +9,33 @@ const Navbar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const navigate = useNavigate();
-  const { session, signOut } = useAuth();
-  const [credits, setCredits] = useState(0)
+  const { session, signOut, getCredits: fetchCredits } = useAuth();
+  const [credits, setCredits] = useState<number | undefined>(undefined)
 
-  const getCredits = async () => {
+  const loadCredits = async () => {
     try {
-      const {data} = await api.get('/api/user/credits');
-      setCredits(data.credits)
+      // Try to get credits from session first
+      if (session?.user?.credits !== undefined) {
+        setCredits(session.user.credits);
+        return;
+      }
+      
+      // If not in session, fetch from API
+      const creditsFromApi = await fetchCredits();
+      setCredits(creditsFromApi);
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || error.message)
-      console.log(error);
+      console.log("Error loading credits:", error);
+      setCredits(0);
     }
   }
 
   useEffect(() => {
     if(session?.user){
-      getCredits();
+      loadCredits();
     } else {
-      setCredits(0);
+      setCredits(undefined);
     }
-  }, [session?.user]);
+  }, [session?.user, session?.user?.credits]);
 
   // Lock scroll when mobile menu is open
   useEffect(() => {
@@ -92,7 +99,7 @@ const Navbar = () => {
             </button>
           ) : (
             <>
-              <button className='bg-white/10 px-5 py-1.5 text-xs sm:text-sm border text-gray-200 rounded-full'>Credits : <span className='text-indigo-300'>{credits}</span></button>
+              <button className='bg-white/10 px-5 py-1.5 text-xs sm:text-sm border text-gray-200 rounded-full'>Credits : <span className='text-indigo-300'>{credits ?? '-'}</span></button>
               <div className="relative">
                 <button
                   onClick={() => setProfileMenuOpen((open) => !open)}

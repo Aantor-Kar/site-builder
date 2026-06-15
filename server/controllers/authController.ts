@@ -51,9 +51,19 @@ export const getSession = async (req: Request, res: Response) => {
       return res.json({ session: null });
     }
 
+    // Ensure user has credits initialized
+    let user = session.user;
+    if (!user.credits || user.credits === 0) {
+      const updatedUser = await prisma.user.update({
+        where: { id: user.id },
+        data: { credits: 20 }
+      });
+      user = updatedUser;
+    }
+
     return res.json({
       session: {
-        user: sanitizeUser(session.user),
+        user: sanitizeUser(user),
       },
     });
   } catch (error: any) {
@@ -156,6 +166,16 @@ export const signIn = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
+    // Ensure user has credits initialized
+    let user = account.user;
+    if (!user.credits || user.credits === 0) {
+      const updatedUser = await prisma.user.update({
+        where: { id: account.userId },
+        data: { credits: 20 }
+      });
+      user = updatedUser;
+    }
+
     const previousToken = getSessionTokenFromRequest(req);
     await revokeSession(previousToken);
 
@@ -170,7 +190,7 @@ export const signIn = async (req: Request, res: Response) => {
     return res.json({
       message: "Signed in successfully",
       session: {
-        user: sanitizeUser(account.user),
+        user: sanitizeUser(user),
       },
     });
   } catch (error: any) {
