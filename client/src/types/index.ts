@@ -5,6 +5,7 @@ export interface User {
     imageUrl?: string;
     name?: string;
     image?: string;
+    credits?: number;
 }
 
 export interface Message {

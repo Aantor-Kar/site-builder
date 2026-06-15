@@ -499,6 +499,8 @@ export const purchaseCredits = async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.log(error);
-    res.status(500).json({ message: error.message });
+    if (!res.headersSent) {
+      return res.status(500).json({ message: error.message || "Failed to purchase credits" });
+    }
   }
 };

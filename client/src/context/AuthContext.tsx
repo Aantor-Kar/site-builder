@@ -26,6 +26,8 @@ interface AuthContextValue {
     newPassword: string;
   }) => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
+  getCredits: () => Promise<number>;
+  purchaseCredits: (planId: string) => Promise<{ payment_link: string }>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -99,6 +101,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsPending(false);
   };
 
+  const getCredits = async () => {
+    const { data } = await api.get("/api/user/credits");
+    return data.credits;
+  };
+
+  const purchaseCredits = async (planId: string) => {
+    const { data } = await api.post("/api/user/purchase-credits", { planId });
+    return data;
+  };
+
   useEffect(() => {
     void refreshSession();
   }, []);
@@ -115,6 +127,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         updateProfile,
         changePassword,
         deleteAccount,
+        getCredits,
+        purchaseCredits,
       }}
     >
       {children}

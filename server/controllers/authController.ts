@@ -19,12 +19,14 @@ function sanitizeUser(user: {
   id: string;
   email: string;
   name: string;
+  credits: number;
   image: string | null;
 }) {
   return {
     id: user.id,
     email: user.email,
     name: user.name,
+    credits: user.credits,
     image: user.image,
   };
 }
