@@ -8,10 +8,13 @@ export const SESSION_COOKIE_NAME = "auth_session";
 function getBaseCookieOptions() {
   const isProduction = process.env.NODE_ENV === "production";
 
+  console.log("COOKIE CONFIG DEPLOY TEST");
+  console.log("NODE_ENV =", process.env.NODE_ENV);
+
   return {
     httpOnly: true,
-    secure: true,
-    sameSite: "none",
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
     path: "/",
   };
 }
