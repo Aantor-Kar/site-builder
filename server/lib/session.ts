@@ -11,7 +11,7 @@ function getBaseCookieOptions() {
   return {
     httpOnly: true,
     secure: isProduction,
-    sameSite: "lax" as const,
+    sameSite: isProduction ? "none" : "lax",
     path: "/",
   };
 }
