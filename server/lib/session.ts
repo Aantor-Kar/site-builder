@@ -1,11 +1,11 @@
 import { randomBytes, randomUUID } from "crypto";
-import type { Request, Response } from "express";
+import type { CookieOptions, Request, Response } from "express";
 import prisma from "./prisma.js";
 
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 export const SESSION_COOKIE_NAME = "auth_session";
 
-function getBaseCookieOptions() {
+function getBaseCookieOptions(): CookieOptions {
   const isProduction = process.env.NODE_ENV === "production";
 
   console.log("COOKIE CONFIG DEPLOY TEST");
@@ -14,7 +14,7 @@ function getBaseCookieOptions() {
   return {
     httpOnly: true,
     secure: isProduction,
-    sameSite: (isProduction ? "none" : "lax") as const,
+    sameSite: isProduction ? "none" : "lax",
     path: "/",
   };
 }
